@@ -1,0 +1,29 @@
+{
+  "baseURL": "https://0.0.0.0",
+
+  "dirs": {
+    "origins": "./origins",
+    "compared": "./compared"
+  },
+
+  "routes": [
+    {
+      "path": "/about",
+      "name": "About page",
+      "resolutions": {
+        "320x480": [
+          {
+            "type": "page",
+            "url": "{dirs}/{path}-320x480.png"
+          },
+          {
+            "type": "element",
+            "description": "Copyright information",
+            "selector": "#footer > .class",
+            "url": "{dirs}/{path}-{selector}-320x480.png"
+          }
+        ]
+      }
+    }
+  ]
+}

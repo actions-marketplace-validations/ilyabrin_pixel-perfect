@@ -56,3 +56,6 @@ sw.*
 
 # Vim swap files
 *.swp
+
+# Local testing files 
+xdiff.png

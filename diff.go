@@ -20,31 +20,75 @@ func init() {
 }
 
 func main() {
-	img1, err := os.Open("./test.png")
 
-	if err != nil {
-		fmt.Println("test.png file not found!")
+	numArgs := len(os.Args[1:])
+	if numArgs != 2 {
 		os.Exit(1)
 	}
+
+	arg1 := os.Args[1]
+	arg2 := os.Args[2]
+
+	fmt.Println(arg1, arg2)
+
+	if _, err := os.Stat(arg1); os.IsNotExist(err) {
+		log.Fatalf("File %s is not exists", arg1)
+	}
+
+	if _, err := os.Stat(arg2); os.IsNotExist(err) {
+		log.Fatalf("File %s is not exists", arg2)
+	}
+
+	// открыть файлы если они есть
+	// узнать ширину и высоту
+	// есть они разные - выйти
+	// делим обе картинки на квадраты 100x100
+	// каждый квадрат нумеруем и помещаем в мапу или канал
+	// должно выглядеть как map[int]React (мапа будет последовательно читать)
+	// затем сравниваем покусочно map1[int]image100x100 == map2[int]100x100
+	// если нет различий - идем дальше и проверяем следующие два квадрата
+	// если различия есть - записываем в результирующую мапу новый квадрат с красными пикселями
+	// если есть различия - создаем issue с лейблом UI collision
+	// если ошибок нет - кайфуем
+
+	// os.Exit(1)
+
+	img1, _ := os.Open(arg1)
+	img2, _ := os.Open(arg2)
+
 	defer img1.Close()
+	defer img2.Close()
 
-	imgCfg, _, err := image.DecodeConfig(img1)
-
+	img1_Cfg, _, err := image.DecodeConfig(img1)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		log.Println(err)
+		return
 	}
 
-	width := imgCfg.Width
-	height := imgCfg.Height
+	img2_Cfg, _, err := image.DecodeConfig(img2)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
-	log.Println("Width : ", width)
-	log.Println("Height : ", height)
+	img1_width := img1_Cfg.Width
+	img1_height := img1_Cfg.Height
+
+	img2_width := img2_Cfg.Width
+	img2_height := img2_Cfg.Height
+
+	log.Println("Image 1 width : ", img1_width)
+	log.Println("Image 1 height : ", img1_height)
+
+	log.Println("Image 2 width : ", img2_width)
+	log.Println("Image 2 height : ", img2_height)
 
 	img1.Seek(0, 0)
+	img2.Seek(0, 0)
 
 	img, _, err := image.Decode(img1)
 
+	// todo: add not fixed size check bounds
 	x0 := 0
 	y0 := 0
 	x1 := 200

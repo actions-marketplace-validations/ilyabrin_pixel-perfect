@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"image"
+	"image/color"
+	"image/draw"
 	"image/png"
 	"log"
 	"os"
+	"strconv"
 )
 
 /*
@@ -29,6 +32,9 @@ const (
 func init() {
 	image.RegisterFormat("png", "png", png.Decode, png.DecodeConfig)
 }
+
+var imageParts1 []image.Image
+var imageParts2 []image.Image
 
 func main() {
 
@@ -115,9 +121,13 @@ func main() {
 	y1 := QUAD_SIZE
 
 	img1.Seek(0, 0)
+	img2.Seek(0, 0)
 
 	imgOne, _, err := image.Decode(img1)
-	// imgTwo, _, err := image.Decode(img2)
+	imgTwo, _, err := image.Decode(img2)
+
+	imageParts1 := make([]image.Image, 0, x_iter*y_iter)
+	imageParts2 := make([]image.Image, 0, x_iter*y_iter)
 
 	for y := 0; y < y_iter; y++ {
 		for x := 0; x < x_iter; x++ {
@@ -133,20 +143,27 @@ func main() {
 
 			fmt.Println(x0, y0, x1, y1)
 
-			img_part := imgOne.(interface {
+			// (O_o) rewrite ASAP!
+			img_part1 := imgOne.(interface {
 				SubImage(r image.Rectangle) image.Image
 			}).SubImage(image.Rect(x0, y0, x1, y1))
+			imageParts1 = append(imageParts1, img_part1)
 
-			f, err := os.Create("./parts/part_" + fmt.Sprint(x) + "_" + fmt.Sprint(y) + ".png")
-			if err != nil {
-				log.Println(err)
-			}
-			defer f.Close()
+			img_part2 := imgTwo.(interface {
+				SubImage(r image.Rectangle) image.Image
+			}).SubImage(image.Rect(x0, y0, x1, y1))
+			imageParts2 = append(imageParts2, img_part2)
 
-			err = png.Encode(f, img_part)
-			if err != nil {
-				log.Println(err)
-			}
+			// f, err := os.Create("./parts/part_" + fmt.Sprint(x) + fmt.Sprint(y) + ".png")
+			// if err != nil {
+			// 	log.Println(err)
+			// }
+			// defer f.Close()
+
+			// err = png.Encode(f, img_part1)
+			// if err != nil {
+			// 	log.Println(err)
+			// }
 
 			x0 += QUAD_SIZE
 			x1 += QUAD_SIZE
@@ -156,55 +173,43 @@ func main() {
 		x1 = QUAD_SIZE
 		y0 += QUAD_SIZE
 		y1 += QUAD_SIZE
-
 	}
 
 	//////
-	log.Print("KEK")
+	log.Println("KEK", len(imageParts1))
 
-	os.Exit(1)
+	newImage := image.NewRGBA(image.Rect(0, 0, img1_width, img1_height))
 
-	img1.Seek(0, 0)
-	img2.Seek(0, 0)
+	clr, _ := ToRGBA("FFFFFF")
 
-	img, _, err := image.Decode(img1)
+	draw.Draw(newImage, newImage.Bounds(), image.NewUniform(clr), image.Point{}, draw.Src)
 
-	// todo: add not fixed size check bounds
-	// x0 := 0
-	// y0 := 0
-	// x1 := 200
-	// y1 := 200
+	for idx := range imageParts1 {
+		// println(idx)b
+		// println(imageParts1[idx] == imageParts2[idx])
 
-	for y := 0; y < 3; y++ {
-		for x := 0; x < 4; x++ {
-			// todo: send to chan with parts
-			img_part := img.(interface {
-				SubImage(r image.Rectangle) image.Image
-			}).SubImage(image.Rect(x0, y0, x1, y1))
+		// f, err := os.Create("./parts/part_" + fmt.Sprint(idx) + ".png")
+		// if err != nil {
+		// 	log.Println(err)
+		// }
+		// defer f.Close()
 
-			fmt.Println(x0, y0, x1, y1)
+		draw.Draw(newImage, newImage.Bounds(), imageParts1[idx], image.Point{0, 0}, draw.Src)
 
-			f, err := os.Create("./parts/part_" + fmt.Sprint(x) + "_" + fmt.Sprint(y) + ".png")
-			if err != nil {
-				log.Println(err)
-			}
-			defer f.Close()
-
-			err = png.Encode(f, img_part)
-			if err != nil {
-				log.Println(err)
-			}
-
-			x0 += 200
-			x1 += 200
-		}
-
-		x0 = 0
-		x1 = 200
-		y0 += 200
-		y1 += 200
-
+		// err = png.Encode(f, imageParts1[idx])
+		// if err != nil {
+		// 	log.Println(err)
+		// }
 	}
+
+	f, err := os.Create("./parts/result.png")
+	if err != nil {
+		log.Println(err)
+	}
+	defer f.Close()
+
+	err = png.Encode(f, newImage)
+	os.Exit(1)
 
 	// enc := png.Encoder{
 	// 	CompressionLevel: png.BestSpeed,
@@ -255,6 +260,34 @@ func diff(path_img1, path_img2 string) {
 	// 	}
 	// }
 
+}
+
+func ToRGBA(h string) (color.RGBA, error) {
+	rgb, err := hex2RGB(h)
+	if err != nil {
+		return color.RGBA{}, err
+	}
+
+	return color.RGBA{R: rgb.red, G: rgb.green, B: rgb.blue, A: 255}, nil
+}
+
+func hex2RGB(hex string) (rgb, error) {
+	values, err := strconv.ParseUint(hex, 16, 32)
+	if err != nil {
+		return rgb{}, err
+	}
+
+	return rgb{
+		red:   uint8(values >> 16),
+		green: uint8((values >> 8) & 0xFF),
+		blue:  uint8(values & 0xFF),
+	}, nil
+}
+
+type rgb struct {
+	red   uint8
+	green uint8
+	blue  uint8
 }
 
 // compare images by resolution sizes

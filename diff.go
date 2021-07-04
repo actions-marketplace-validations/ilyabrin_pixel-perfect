@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -15,7 +14,7 @@ import (
    1. ok - open image
    2. ok - slice into separate parts (regions)
    3.    - process each part with goroutine
-   4.    - save result into new image
+   4. ok - save result into new image
 */
 
 // todo: use in later
@@ -33,20 +32,17 @@ func init() {
 	image.RegisterFormat("png", "png", png.Decode, png.DecodeConfig)
 }
 
-var imageParts1 []image.Image
-var imageParts2 []image.Image
+var imageParts1, imageParts2 []image.Image
 
 func main() {
 
 	numArgs := len(os.Args[1:])
 	if numArgs != 2 {
-		os.Exit(1)
+		log.Fatal("two args only error message")
 	}
 
 	arg1 := os.Args[1]
 	arg2 := os.Args[2]
-
-	fmt.Println(arg1, arg2)
 
 	if _, err := os.Stat(arg1); os.IsNotExist(err) {
 		log.Fatalf("File %s is not exists", arg1)
@@ -55,20 +51,6 @@ func main() {
 	if _, err := os.Stat(arg2); os.IsNotExist(err) {
 		log.Fatalf("File %s is not exists", arg2)
 	}
-
-	// [ok] - открыть файлы если они есть
-	// [ok] - узнать ширину и высоту
-	// [ok] - есть они разные - выйти
-	// [ok] - делим обе картинки на квадраты 100x100
-	// [--] - каждый квадрат нумеруем и помещаем в мапу или канал
-	// [--] - должно выглядеть как map[int]React (мапа будет последовательно читать)
-	// [--] - затем сравниваем покусочно map1[int]image100x100 == map2[int]100x100
-	// [--] - если нет различий - идем дальше и проверяем следующие два квадрата
-	// [--] - если различия есть - записываем в результирующую мапу новый квадрат с красными пикселями
-	// [--] - если есть различия - создаем issue с лейблом UI collision
-	// [--] - если ошибок нет - кайфуем
-
-	// os.Exit(1)
 
 	img1, _ := os.Open(arg1)
 	img2, _ := os.Open(arg2)
@@ -112,8 +94,6 @@ func main() {
 		x_iter += 1
 	}
 
-	fmt.Printf("\nY: %d \n X: %d \n Mod_X: %d \n Mod_Y: %d \n", y_iter, x_iter, x_mod, y_mod)
-
 	x0 := 0
 	y0 := 0
 
@@ -131,7 +111,8 @@ func main() {
 
 	for y := 0; y < y_iter; y++ {
 		for x := 0; x < x_iter; x++ {
-			// todo: send to chan with parts
+
+			// TODO: send to chan with parts
 
 			if x == x_iter && x_mod != 0 {
 				x1 -= QUAD_SIZE + x_mod
@@ -140,8 +121,6 @@ func main() {
 			if y == y_iter && y_mod != 0 {
 				y1 -= QUAD_SIZE + y_mod
 			}
-
-			fmt.Println(x0, y0, x1, y1)
 
 			// (O_o) rewrite ASAP!
 			img_part1 := imgOne.(interface {
@@ -154,17 +133,6 @@ func main() {
 			}).SubImage(image.Rect(x0, y0, x1, y1))
 			imageParts2 = append(imageParts2, img_part2)
 
-			// f, err := os.Create("./parts/part_" + fmt.Sprint(x) + fmt.Sprint(y) + ".png")
-			// if err != nil {
-			// 	log.Println(err)
-			// }
-			// defer f.Close()
-
-			// err = png.Encode(f, img_part1)
-			// if err != nil {
-			// 	log.Println(err)
-			// }
-
 			x0 += QUAD_SIZE
 			x1 += QUAD_SIZE
 		}
@@ -175,31 +143,19 @@ func main() {
 		y1 += QUAD_SIZE
 	}
 
-	//////
-	log.Println("KEK", len(imageParts1))
-
 	newImage := image.NewRGBA(image.Rect(0, 0, img1_width, img1_height))
-
 	clr, _ := ToRGBA("FFFFFF")
 
 	draw.Draw(newImage, newImage.Bounds(), image.NewUniform(clr), image.Point{}, draw.Src)
 
 	for idx := range imageParts1 {
-		// println(idx)b
-		// println(imageParts1[idx] == imageParts2[idx])
-
-		// f, err := os.Create("./parts/part_" + fmt.Sprint(idx) + ".png")
-		// if err != nil {
-		// 	log.Println(err)
-		// }
-		// defer f.Close()
-
-		draw.Draw(newImage, newImage.Bounds(), imageParts1[idx], image.Point{0, 0}, draw.Src)
-
-		// err = png.Encode(f, imageParts1[idx])
-		// if err != nil {
-		// 	log.Println(err)
-		// }
+		// imageParts1[idx], err = diff(imageParts1[idx], imageParts2[idx])
+		img, err := diff(imageParts1[idx], imageParts2[idx])
+		if err != nil {
+			log.Fatal(err)
+		}
+		draw.Draw(newImage, newImage.Bounds(), img, image.Point{0, 0}, draw.Src)
+		// draw.Draw(newImage, newImage.Bounds(), imageParts1[idx], image.Point{0, 0}, draw.Src)
 	}
 
 	f, err := os.Create("./parts/result.png")
@@ -209,57 +165,31 @@ func main() {
 	defer f.Close()
 
 	err = png.Encode(f, newImage)
-	os.Exit(1)
-
-	// enc := png.Encoder{
-	// 	CompressionLevel: png.BestSpeed,
-	// }
-	// for y := 0; y < height; y++ {
-	// 	for x := 0; x < width; x++ {
-	// 		r, g, b, a := img.At(x, y).RGBA()
-	// 		fmt.Printf("[X : %d Y : %v] R : %v, G : %v, B : %v, A : %v  \n", x, y, r, g, b, a)
-	// 	}
-	// }
-
-	// TODO: diff("test_1.png", "test_2.png")
-
 }
 
-func diff(path_img1, path_img2 string) {
-	img1, err := os.Open(path_img1)
+// pixel-by-pixel image parts comparison
+func diff(img1, img2 image.Image) (image.Image, error) {
 
-	if err != nil {
-		log.Fatalf("file not found: %s", path_img1)
+	bounds := img1.Bounds()
+
+	w := bounds.Max.X
+	h := bounds.Max.Y
+
+	// todo: night code concept
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+
+			r1, g1, b1, _ := img1.At(x, y).RGBA()
+			r2, g2, b2, _ := img2.At(x, y).RGBA()
+
+			img1.(draw.Image).Set(x, y, color.GrayModel.Convert(img1.At(x, y)))
+
+			if (r1 + g1 + b1) != (r2 + g2 + b2) {
+				img1.(draw.Image).Set(x, y, color.RGBA{uint8(250), uint8(0), uint8(0), uint8(255)})
+			}
+		}
 	}
-	defer img1.Close()
-
-	img2, err := os.Open(path_img2)
-
-	if err != nil {
-		log.Fatalf("file not found: %s", path_img2)
-	}
-	defer img2.Close()
-
-	imgCfg1, _, err := image.DecodeConfig(img1)
-
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	w1 := imgCfg1.Width
-	h1 := imgCfg1.Height
-
-	println("-----")
-	fmt.Println(w1, h1)
-
-	// for y := 0; y < h1; y++ {
-	// 	for x := 0; x < w1; x++ {
-	// 		r, g, b, a := imgCfg1.At(x, y).RGBA()
-	// 		fmt.Printf("[X : %d Y : %v] R : %v, G : %v, B : %v, A : %v  \n", x, y, r, g, b, a)
-	// 	}
-	// }
-
+	return img1, nil
 }
 
 func ToRGBA(h string) (color.RGBA, error) {
@@ -292,13 +222,6 @@ type rgb struct {
 
 // compare images by resolution sizes
 func checkImgSizes(img1h, img2h, img1w, img2w int) bool {
-
-	log.Println("Image 1 width : ", img1w)
-	log.Println("Image 1 height : ", img1h)
-
-	log.Println("Image 2 width : ", img2w)
-	log.Println("Image 2 height : ", img2h)
-
 	if img1h != img2h || img1w != img2w {
 		return false
 	}

@@ -1,13 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"crypto/md5"
 	"image"
 	"image/color"
 	"image/draw"
 	"image/png"
 	"log"
 	"os"
-	"strconv"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -33,6 +35,7 @@ const (
 )
 
 func init() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	image.RegisterFormat("png", "png", png.Decode, png.DecodeConfig)
 }
 
@@ -49,44 +52,27 @@ type Pair struct {
 func parallelProcessDifferences(parts chan Pair, w, h int) {
 	// помещаем в канал parts пару Pair{orig, comp}
 	// затем в горутине сравниваем пары и пишем результат в compared
-	// после всеъ проверок и сравнений рендерим все части из compared
-	// imCh := make(chan image.Image)
-
-	len_parts := len(parts)
+	// после всех проверок и сравнений рендерим все части из compared
 
 	var wg sync.WaitGroup
 
+	len_parts := len(parts)
+
 	// TODO: должно быть не так, цикл заменить на горутину и канал(ы)
 	// правильно так: diff проверяет совпадение и помещает в канал результат
-	// как только результат по]вилс] в канале - друга] горутина забирает его в компаред
+	// как только результат появится в канале - другая горутина забирет его в компаред
 	// если все пары обработаны - рендерим картинку и завершаем работу
 	for x := 0; x < len_parts; x++ {
 		wg.Add(1) // TODO: должны параллельно сразу все пары влететь, а не по одной
 		part := <-parts
 		go diff(part.Original, part.Compared, &wg)
-		// time.Sleep(5 * time.Microsecond)
 	}
 	wg.Wait()
 	close(parts)
-
-	newImage := image.NewRGBA(image.Rect(0, 0, w, h))
-	clr, _ := ToRGBA("FFFFFF")
-
-	draw.Draw(newImage, newImage.Bounds(), image.NewUniform(clr), image.Point{}, draw.Src)
-
-	for idx := range compared {
-		draw.Draw(newImage, newImage.Bounds(), compared[idx], image.Point{0, 0}, draw.Src)
-	}
-
-	f, err := os.Create(RESULT_IMAGE_PATH)
-	if err != nil {
-		log.Println(err)
-	}
-	defer f.Close()
-
-	err = png.Encode(f, newImage)
-
 }
+
+// diff overlay
+var diffOverlay image.Image
 
 func main() {
 
@@ -162,11 +148,7 @@ func main() {
 	imgOne, _, err := image.Decode(img1)
 	imgTwo, _, err := image.Decode(img2)
 
-	// imageParts1 := make([]image.Image, 0, x_iter*y_iter)
-	// imageParts2 := make([]image.Image, 0, x_iter*y_iter)
-
 	chanPairs := make(chan Pair, x_iter*y_iter) // store Pairs for compare
-	// chanPairs := make(chan Pair) // store Pairs for compare
 
 	for y := 0; y < y_iter; y++ {
 		for x := 0; x < x_iter; x++ {
@@ -179,20 +161,25 @@ func main() {
 				y1 -= QUAD_SIZE + y_mod
 			}
 
-			// (O_o) rewrite ASAP!
-			img_part1 := imgOne.(interface {
-				SubImage(r image.Rectangle) image.Image
-			}).SubImage(image.Rect(x0, y0, x1, y1))
-			// imageParts1 = append(imageParts1, img_part1)
+			img_part1 := SubImage(imgOne, x0, y0, x1, y1)
+			img_part2 := SubImage(imgTwo, x0, y0, x1, y1)
 
-			img_part2 := imgTwo.(interface {
-				SubImage(r image.Rectangle) image.Image
-			}).SubImage(image.Rect(x0, y0, x1, y1))
-			// imageParts2 = append(imageParts2, img_part2)
+			buf_im1 := new(bytes.Buffer)
+			buf_im2 := new(bytes.Buffer)
+			err_im1 := png.Encode(buf_im1, img_part1)
+			err_im2 := png.Encode(buf_im2, img_part2)
 
-			chanPairs <- Pair{
-				Original: img_part1,
-				Compared: img_part2,
+			if err_im1 != nil || err_im2 != nil {
+				log.Fatalf("err_im1: = %v, err_im2 = %v", err_im1, err_im2)
+			}
+
+			if md5.Sum(buf_im1.Bytes()) == md5.Sum(buf_im2.Bytes()) {
+				compared = append(compared, img_part1)
+			} else {
+				chanPairs <- Pair{
+					Original: img_part1,
+					Compared: img_part2,
+				}
 			}
 
 			x0 += QUAD_SIZE
@@ -206,6 +193,22 @@ func main() {
 	}
 
 	parallelProcessDifferences(chanPairs, img1_width, img1_height)
+
+	newImage := image.NewRGBA(image.Rect(0, 0, img1_width, img1_height))
+	clr, _ := ToRGBA("FFFFFF")
+	draw.Draw(newImage, newImage.Bounds(), image.NewUniform(clr), image.Point{}, draw.Src)
+
+	for idx := range compared {
+		draw.Draw(newImage, newImage.Bounds(), compared[idx], image.Point{0, 0}, draw.Over)
+	}
+
+	f, err := os.Create(RESULT_IMAGE_PATH)
+	if err != nil {
+		log.Println(err)
+	}
+	defer f.Close()
+
+	err = png.Encode(f, newImage)
 
 	elapsed := time.Since(start)
 	log.Printf("Diff took %s", elapsed)
@@ -228,48 +231,14 @@ func diff(img1, img2 image.Image, wg *sync.WaitGroup) { //(image.Image, error) {
 			r1, g1, b1, _ := img1.At(x, y).RGBA()
 			r2, g2, b2, _ := img2.At(x, y).RGBA()
 
-			img1.(draw.Image).Set(x, y, color.GrayModel.Convert(img1.At(x, y)))
+			// NOTE: slow op
+			// img1.(draw.Image).Set(x, y, color.GrayModel.Convert(img1.At(x, y)))
 
 			if (r1 + g1 + b1) != (r2 + g2 + b2) {
 				img1.(draw.Image).Set(x, y, color.RGBA{uint8(250), uint8(0), uint8(0), uint8(255)})
 			}
 		}
 	}
+
 	compared = append(compared, img1)
-}
-
-func ToRGBA(h string) (color.RGBA, error) {
-	rgb, err := hex2RGB(h)
-	if err != nil {
-		return color.RGBA{}, err
-	}
-
-	return color.RGBA{R: rgb.red, G: rgb.green, B: rgb.blue, A: 255}, nil
-}
-
-func hex2RGB(hex string) (rgb, error) {
-	values, err := strconv.ParseUint(hex, 16, 32)
-	if err != nil {
-		return rgb{}, err
-	}
-
-	return rgb{
-		red:   uint8(values >> 16),
-		green: uint8((values >> 8) & 0xFF),
-		blue:  uint8(values & 0xFF),
-	}, nil
-}
-
-type rgb struct {
-	red   uint8
-	green uint8
-	blue  uint8
-}
-
-// compare images by resolution sizes
-func checkImgSizes(img1h, img2h, img1w, img2w int) bool {
-	if img1h != img2h || img1w != img2w {
-		return false
-	}
-	return true
 }

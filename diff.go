@@ -1,135 +1,184 @@
 package main
 
 import (
-	"fmt"
+	"bytes"
+	"crypto/md5"
 	"image"
+	"image/draw"
 	"image/png"
 	"log"
 	"os"
+	"runtime"
+	"time"
 )
 
-/*
-   1. ok - open image
-   2. ok - slice into separate parts (regions)
-   3.    - process each part with goroutine
-   4.    - save result into new image
-*/
+var grayLayer image.Image
 
 func init() {
-	image.RegisterFormat("png", "png", png.Decode, png.DecodeConfig)
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	image.RegisterFormat(defaultMimeType, defaultMimeType, png.Decode, png.DecodeConfig)
 }
 
+// Pair ...
+type Pair struct {
+	Original image.Image
+	Compared image.Image
+}
+
+var compared []image.Image
+
+// var dotsLayer image.Image
+
 func main() {
-	img1, err := os.Open("./test.png")
 
-	if err != nil {
-		fmt.Println("test.png file not found!")
-		os.Exit(1)
+	start := time.Now()
+
+	checkArgs()
+
+	arg1 := os.Args[1]
+	arg2 := os.Args[2]
+
+	if _, err := os.Stat(arg1); os.IsNotExist(err) {
+		log.Fatalf("File %s is not exists", arg1)
 	}
+
+	if _, err := os.Stat(arg2); os.IsNotExist(err) {
+		log.Fatalf("File %s is not exists", arg2)
+	}
+
+	img1, _ := os.Open(arg1)
+	img2, _ := os.Open(arg2)
+
 	defer img1.Close()
+	defer img2.Close()
 
-	imgCfg, _, err := image.DecodeConfig(img1)
-
+	image1, _, err := image.DecodeConfig(img1)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		log.Println(err)
+		return
 	}
 
-	width := imgCfg.Width
-	height := imgCfg.Height
+	image2, _, err := image.DecodeConfig(img2)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
-	log.Println("Width : ", width)
-	log.Println("Height : ", height)
+	image1W := image1.Width
+	image1H := image1.Height
 
-	img1.Seek(0, 0)
+	image2W := image2.Width
+	image2H := image2.Height
 
-	img, _, err := image.Decode(img1)
+	if !checkImgSizes(image1H, image2H, image1W, image2W) {
+		log.Fatal("images must be the same size")
+	}
+
+	yIter := image1H / sizeQuad
+	xIter := image1W / sizeQuad
+
+	yMod := image1H % sizeQuad
+	xMod := image1W % sizeQuad
+
+	if yMod > 0 {
+		yIter++
+	}
+
+	if xMod > 0 {
+		xIter++
+	}
 
 	x0 := 0
 	y0 := 0
-	x1 := 200
-	y1 := 200
 
-	for y := 0; y < 3; y++ {
-		for x := 0; x < 4; x++ {
-			// todo: send to chan with parts
-			img_part := img.(interface {
-				SubImage(r image.Rectangle) image.Image
-			}).SubImage(image.Rect(x0, y0, x1, y1))
+	x1 := sizeQuad
+	y1 := sizeQuad
 
-			fmt.Println(x0, y0, x1, y1)
+	img1.Seek(0, 0)
+	img2.Seek(0, 0)
 
-			f, err := os.Create("./parts/part_" + fmt.Sprint(x) + "_" + fmt.Sprint(y) + ".png")
-			if err != nil {
-				log.Println(err)
-			}
-			defer f.Close()
+	imgOne, _, err := image.Decode(img1)
+	imgTwo, _, err := image.Decode(img2)
 
-			err = png.Encode(f, img_part)
-			if err != nil {
-				log.Println(err)
+	chanPairs := make(chan Pair, xIter*yIter) // store Pairs for compare
+
+	for y := 0; y < yIter; y++ {
+		for x := 0; x < xIter; x++ {
+
+			if x == xIter && xMod != 0 {
+				x1 -= sizeQuad + xMod
 			}
 
-			x0 += 200
-			x1 += 200
+			if y == yIter && yMod != 0 {
+				y1 -= sizeQuad + yMod
+			}
+
+			imgPart1 := SubImage(imgOne, x0, y0, x1, y1)
+			imgPart2 := SubImage(imgTwo, x0, y0, x1, y1)
+
+			bufImage1 := new(bytes.Buffer)
+			bufImage2 := new(bytes.Buffer)
+
+			errImage1 := png.Encode(bufImage1, imgPart1)
+			errImage2 := png.Encode(bufImage2, imgPart2)
+
+			if errImage1 != nil || errImage2 != nil {
+				log.Fatalf("errImage1: = %v, errImage2 = %v", errImage1, errImage2)
+			}
+
+			if md5.Sum(bufImage1.Bytes()) == md5.Sum(bufImage2.Bytes()) {
+				compared = append(compared, imgPart1)
+			} else {
+				chanPairs <- Pair{
+					Original: imgPart1,
+					Compared: imgPart2,
+				}
+			}
+
+			x0 += sizeQuad
+			x1 += sizeQuad
 		}
 
 		x0 = 0
-		x1 = 200
-		y0 += 200
-		y1 += 200
+		x1 = sizeQuad
 
+		y0 += sizeQuad
+		y1 += sizeQuad
 	}
 
-	// enc := png.Encoder{
-	// 	CompressionLevel: png.BestSpeed,
-	// }
-	// for y := 0; y < height; y++ {
-	// 	for x := 0; x < width; x++ {
-	// 		r, g, b, a := img.At(x, y).RGBA()
-	// 		fmt.Printf("[X : %d Y : %v] R : %v, G : %v, B : %v, A : %v  \n", x, y, r, g, b, a)
-	// 	}
-	// }
+	// core.go
+	parallelProcessDifferences(chanPairs, image1W, image1H)
 
-	// TODO: diff("test_1.png", "test_2.png")
+	resultImage := image.NewRGBA(image.Rect(0, 0, image1W, image1H))
+	clr2, _ := ToRGBA("FFFFFF")
+	draw.Draw(resultImage, resultImage.Bounds(), image.NewUniform(clr2), image.Point{}, draw.Src)
 
-}
+	for idx := range compared {
+		draw.Draw(resultImage, resultImage.Bounds(), compared[idx], image.Point{0, 0}, draw.Src)
+	}
 
-func diff(path_img1, path_img2 string) {
-	img1, err := os.Open(path_img1)
+	// TODO: experiments with direct pixel processing
+	/*
+		 redRect := image.Rect(60, 80, 120, 160)
+		 myred := color.RGBA{250, 0, 0, 150}
 
+		 grayLayer := Grayscale(resultImage)
+		 tens := toTensor(imgOne)
+		 greyScale(&tens)
+		 grayLayer := toImage(tens)
+
+		draw.Draw(grayLayer.(draw.Image), redRect, &image.Uniform{myred}, image.Point{}, draw.Src)
+	*/
+
+	f, err := os.Create(resultImagePath)
 	if err != nil {
-		fmt.Println("file not found!")
-		os.Exit(1)
+		log.Println(err)
 	}
-	defer img1.Close()
+	defer f.Close()
 
-	img2, err := os.Open(path_img2)
+	// err = png.Encode(f, grayLayer)
+	err = png.Encode(f, resultImage)
 
-	if err != nil {
-		fmt.Println("file not found!")
-		os.Exit(1)
-	}
-	defer img2.Close()
-
-	imgCfg1, _, err := image.DecodeConfig(img1)
-
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	w1 := imgCfg1.Width
-	h1 := imgCfg1.Height
-
-	println("-----")
-	fmt.Println(w1, h1)
-
-	// for y := 0; y < h1; y++ {
-	// 	for x := 0; x < w1; x++ {
-	// 		r, g, b, a := imgCfg1.At(x, y).RGBA()
-	// 		fmt.Printf("[X : %d Y : %v] R : %v, G : %v, B : %v, A : %v  \n", x, y, r, g, b, a)
-	// 	}
-	// }
-
+	elapsed := time.Since(start)
+	log.Printf("Diff took %s", elapsed)
 }

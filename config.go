@@ -10,8 +10,8 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const YAML_CONFIG = "./sample.yml"
-const JSON_CONFIG = "./sample.json"
+const yamlConfigPath = "./sample.yml"
+const jsonConfigPath = "./sample.json"
 
 /*
 	To load config from YAML/JSON you need to do:
@@ -41,7 +41,7 @@ type config struct {
 
 func (c *config) readConfigYML() *config {
 
-	yamlFile, err := ioutil.ReadFile(YAML_CONFIG)
+	yamlFile, err := ioutil.ReadFile(yamlConfigPath)
 	if err != nil {
 		log.Println("YAML file isn't found", err)
 	}
@@ -57,7 +57,7 @@ func (c *config) readConfigYML() *config {
 
 func (c *config) readConfigJSON() *config {
 
-	jsonFile, err := os.Open(JSON_CONFIG)
+	jsonFile, err := os.Open(jsonConfigPath)
 	defer jsonFile.Close()
 
 	if err != nil {

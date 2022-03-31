@@ -3,6 +3,6 @@
   "private": true,
   "dependencies": {
     "minimist": "1.2.6",
-    "puppeteer": "13.5.1"
+    "puppeteer": "13.5.2"
   }
 }

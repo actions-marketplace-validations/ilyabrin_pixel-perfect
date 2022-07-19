@@ -1,5 +1,7 @@
 package main
 
+// TODO: make code more readable
+
 import (
 	"bytes"
 	"crypto/md5"
@@ -12,28 +14,24 @@ import (
 	"time"
 )
 
-var grayLayer image.Image
-
 func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	image.RegisterFormat(defaultMimeType, defaultMimeType, png.Decode, png.DecodeConfig)
 }
 
-// Pair ...
+// Pair of two images to compare
 type Pair struct {
-	Original image.Image
 	Compared image.Image
+	Original image.Image
 }
 
 var compared []image.Image
-
-// var dotsLayer image.Image
 
 func main() {
 
 	start := time.Now()
 
-	checkArgs()
+	checkArgs() // TODO: bad naming
 
 	arg1 := os.Args[1]
 	arg2 := os.Args[2]
@@ -71,7 +69,7 @@ func main() {
 	image2H := image2.Height
 
 	if !checkImgSizes(image1H, image2H, image1W, image2W) {
-		log.Fatal("images must be the same size")
+		log.Fatal(errImagesSize)
 	}
 
 	yIter := image1H / sizeQuad
@@ -98,7 +96,14 @@ func main() {
 	img2.Seek(0, 0)
 
 	imgOne, _, err := image.Decode(img1)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	imgTwo, _, err := image.Decode(img2)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	chanPairs := make(chan Pair, xIter*yIter) // store Pairs for compare
 
@@ -147,7 +152,7 @@ func main() {
 	}
 
 	// core.go
-	parallelProcessDifferences(chanPairs, image1W, image1H)
+	parallelProcessDifferences(chanPairs)
 
 	resultImage := image.NewRGBA(image.Rect(0, 0, image1W, image1H))
 	clr2, _ := ToRGBA("FFFFFF")
@@ -176,8 +181,10 @@ func main() {
 	}
 	defer f.Close()
 
-	// err = png.Encode(f, grayLayer)
 	err = png.Encode(f, resultImage)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	elapsed := time.Since(start)
 	log.Printf("Diff took %s", elapsed)

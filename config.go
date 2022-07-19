@@ -1,5 +1,7 @@
 package main
 
+// TODO: unused now
+
 import (
 	"encoding/json"
 	"fmt"
@@ -43,7 +45,7 @@ func (c *config) readConfigYML() *config {
 
 	yamlFile, err := ioutil.ReadFile(yamlConfigPath)
 	if err != nil {
-		log.Println("YAML file isn't found", err)
+		log.Println("YAML file not found", err)
 	}
 
 	err = yaml.Unmarshal(yamlFile, c)

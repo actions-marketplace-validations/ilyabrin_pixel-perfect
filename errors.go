@@ -1,8 +1,6 @@
 package main
 
-import (
-	"fmt"
-)
+import "fmt"
 
 const (
 	maxImageHeight = 8129 // px
@@ -21,9 +19,5 @@ const (
 )
 
 var (
-	errTooLargeResolutionW = fmt.Errorf("Resolutions is bigger than %d by hight", maxImageHeight)
-	errTooLargeResolutionH = fmt.Errorf("Resolutions is bigger than 8129px by width")
-
-	errTooSmallResolutionW = fmt.Errorf("Resolutions is smaller than 1px by hight")
-	errTooSmallResolutionH = fmt.Errorf("Resolutions is smaller than 1px by width")
+	errImagesSize = fmt.Errorf("images must be the same size")
 )

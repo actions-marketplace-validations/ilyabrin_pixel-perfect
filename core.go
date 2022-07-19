@@ -23,7 +23,7 @@ func diff(img1, img2 image.Image, wg *sync.WaitGroup) { //(image.Image, error) {
 			r2, g2, b2, _ := img2.At(x, y).RGBA()
 
 			if (r1 + g1 + b1) != (r2 + g2 + b2) {
-				img1.(draw.Image).Set(x, y, color.RGBA{uint8(250), uint8(0), uint8(0), uint8(255)})
+				img1.(draw.Image).Set(x, y, combine(img1.At(x, y), color.RGBA{250, 0, 0, 220}))
 			}
 		}
 	}
@@ -31,7 +31,7 @@ func diff(img1, img2 image.Image, wg *sync.WaitGroup) { //(image.Image, error) {
 }
 
 // TODO: должны параллельно сразу все пары влететь, а не по одной
-func parallelProcessDifferences(parts chan Pair, w, h int) {
+func parallelProcessDifferences(parts chan Pair) {
 
 	var wg sync.WaitGroup
 

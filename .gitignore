@@ -60,3 +60,5 @@ sw.*
 # Local testing files 
 xdiff.png
 test*.png
+screenshot.png
+denoshot.js

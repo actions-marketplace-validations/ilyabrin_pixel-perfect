@@ -61,4 +61,7 @@ sw.*
 xdiff.png
 test*.png
 screenshot.png
+screenshot.jpg
 denoshot.js
+
+cacheDir/

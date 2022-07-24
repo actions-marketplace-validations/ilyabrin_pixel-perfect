@@ -22,7 +22,15 @@
  *
  */
 
+const AWS = require("aws-sdk");
+const { v4: uuidv4 } = require("uuid");
+
 const puppeteer = require("puppeteer");
+
+const s3 = new AWS.S3({
+  accessKeyId: process.env.S3_ACCESS_KEY_ID,
+  secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+});
 
 const minimal_args = [
   "--autoplay-policy=user-gesture-required",
@@ -72,11 +80,12 @@ const minimal_args = [
       fullPage = false,
       selector = "",
     } = require("minimist")(process.argv.slice(2));
+
     const browser = await puppeteer.launch({
       headless: true,
       args: minimal_args,
       userDataDir: "./cacheDir",
-    //   product: 'firefox',
+      //   product: 'firefox',
     });
 
     const page = await browser.newPage();
@@ -99,13 +108,23 @@ const minimal_args = [
     await page.setViewport({ width, height });
     await page.goto(url, { waitUntil: "networkidle2" });
     // await page.goto(url, {waitUntil: 'domcontentloaded'});
-    await page.goto(url);
+    // await page.goto(url);
 
     if (selector) {
       await page.waitForSelector(selector);
       await (await page.$(selector)).screenshot({ path });
     } else {
-      await page.screenshot({ path, fullPage });
+      const screenshot = await page.screenshot({ path, fullPage });
+      const params = {
+        Bucket: "codeplay.ru",
+        Key: `${uuidv4()}.png`,
+        Body: screenshot,
+      };
+      await s3.putObject(params).promise();
+    // TODO: upload to bucket
+    // const response = await s3.upload(params).promise();
+    // const urlPath  = response.Location;
+    // console.log(urlPath)
     }
 
     await page.close();

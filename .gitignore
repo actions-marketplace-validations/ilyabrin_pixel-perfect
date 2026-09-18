@@ -65,3 +65,10 @@ screenshot.jpg
 denoshot.js
 
 cacheDir/
+
+# Build output
+pp
+pp.exe
+pp-linux
+*-diff.png
+diff.png

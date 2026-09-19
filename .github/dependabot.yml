@@ -1,0 +1,23 @@
+version: 2
+
+# Dependabot only reads .github/dependabot.yml. The previous config lived in
+# dependabot-go.yml, which it silently ignored, so version updates never ran
+# and the actions below drifted three majors behind.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Keeps the golang base image in the Dockerfile current.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

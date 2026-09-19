@@ -35,6 +35,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		alpha     = fs.Uint("alpha", 200, "highlight opacity (0-255)")
 		ignoreAA  = fs.Bool("ignore-antialiasing", false, "treat antialiased edge pixels as equal")
 		quiet     = fs.Bool("quiet", false, "print nothing, signal the result via exit code")
+		maxPx     = fs.Int("max-pixels", DefaultMaxPixels, "refuse images larger than this many pixels; 0 disables the check")
 		showVer   = fs.Bool("version", false, "print the version and exit")
 	)
 
@@ -79,6 +80,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "error: %v\n", err)
 		return exitBadUsage
 	}
+
+	maxPixels = *maxPx
 
 	opts := DefaultOptions()
 	opts.Threshold = uint8(*threshold)

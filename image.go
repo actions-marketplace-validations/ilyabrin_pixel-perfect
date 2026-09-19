@@ -7,10 +7,23 @@ import (
 	"image/draw"
 	_ "image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 )
+
+// DefaultMaxPixels caps how large an image may be before it is refused.
+//
+// A comparison holds three RGBA buffers at once, at four bytes per pixel, so
+// this ceiling corresponds to roughly 1.2 GB of pixel data. It is deliberately
+// far above any real screenshot: a full-page capture of 1920x20000 is only 38
+// million pixels. The point is to fail with a clear message on a malformed or
+// hostile file instead of being killed by the OOM reaper.
+const DefaultMaxPixels = 100_000_000
+
+// maxPixels is the active ceiling. Zero disables the check.
+var maxPixels = DefaultMaxPixels
 
 // LoadRGBA decodes an image file into an *image.RGBA anchored at (0,0).
 //
@@ -24,11 +37,44 @@ func LoadRGBA(path string) (*image.RGBA, error) {
 	}
 	defer f.Close()
 
+	// The header alone carries the dimensions, so an oversized file is
+	// rejected before any pixels are allocated.
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+
+	if err := checkSize(path, cfg.Width, cfg.Height); err != nil {
+		return nil, err
+	}
+
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("rewinding %s: %w", path, err)
+	}
+
 	src, _, err := image.Decode(f)
 	if err != nil {
 		return nil, fmt.Errorf("decode %s: %w", path, err)
 	}
 	return toRGBA(src), nil
+}
+
+// checkSize refuses images too large to hold in memory safely.
+func checkSize(path string, width, height int) error {
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("%s has no pixels (%dx%d)", path, width, height)
+	}
+
+	if maxPixels <= 0 {
+		return nil
+	}
+
+	if width > maxPixels/height {
+		return fmt.Errorf("%s is %dx%d, %d megapixels, over the %d megapixel limit; raise -max-pixels to allow it",
+			path, width, height,
+			(width*height)/1_000_000, maxPixels/1_000_000)
+	}
+	return nil
 }
 
 func toRGBA(src image.Image) *image.RGBA {

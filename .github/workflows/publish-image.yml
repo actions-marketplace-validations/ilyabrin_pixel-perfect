@@ -1,0 +1,69 @@
+name: Publish image
+
+on:
+  push:
+    branches: [master]
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Cross-compilation happens inside the Dockerfile, so no QEMU is needed;
+      # buildx is here only to produce a multi-arch manifest.
+      - name: Set up buildx
+        run: docker buildx create --use --name pp-builder
+
+      - name: Log in to ghcr.io
+        run: |
+          echo "${{ github.token }}" \
+            | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      # A tag publishes vX.Y.Z, the floating vX and latest. A push to master
+      # publishes edge, so master is testable without cutting a release.
+      - name: Work out the tags
+        id: tags
+        run: |
+          ref="${{ github.ref_name }}"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            major="${ref%%.*}"
+            {
+              echo "args=-t ${IMAGE}:${ref} -t ${IMAGE}:${major} -t ${IMAGE}:latest"
+              echo "version=${ref}"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "args=-t ${IMAGE}:edge"
+              echo "version=edge"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg "VERSION=${{ steps.tags.outputs.version }}" \
+            ${{ steps.tags.outputs.args }} \
+            --push .
+
+      - name: Verify the published image runs
+        run: |
+          docker run --rm "${IMAGE}:${{ steps.tags.outputs.version }}" -version
+          docker run --rm "${IMAGE}:${{ steps.tags.outputs.version }}" -help 2>&1 | head -3 || true
+
+      - name: Report
+        run: |
+          echo "### Published \`${IMAGE}:${{ steps.tags.outputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Platforms: linux/amd64, linux/arm64" >> "$GITHUB_STEP_SUMMARY"

@@ -14,9 +14,11 @@ inputs:
     description: 'Image under test, or a directory of them'
     required: true
   out:
-    description: 'Where to write diff images; a directory when comparing directories'
+    description: >-
+      Where to write diff images; a directory when comparing directories.
+      Nothing is written unless this is set.
     required: false
-    default: 'pp-diff.png'
+    default: ''
   threshold:
     description: 'Max per-channel delta (0-255) still counted as equal'
     required: false

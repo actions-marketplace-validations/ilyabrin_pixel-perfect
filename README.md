@@ -6,9 +6,12 @@ A single static binary with no dependencies, usable as a CLI or as a GitHub Acti
 
 ## What it does
 
-Compares two images of the same size, reports how many pixels differ, and writes
-a copy of the baseline with every difference highlighted. In CI it fails the
-build when the difference exceeds a tolerance you set.
+Compares two images, or two whole directories of them, reports how many pixels
+differ, and writes a copy of each baseline with every difference highlighted.
+In CI it fails the build when the difference exceeds a tolerance you set.
+
+Each pair must share the same dimensions; screenshots of the same page at the
+same viewport do.
 
 ## Install
 
@@ -75,6 +78,7 @@ not fail, since adding a page is not a regression.
 | `-ignore` | none | Exclude a region as `x,y,width,height`; repeatable |
 | `-max-pixels` | `100000000` | Refuse images larger than this; `0` disables the check |
 | `-quiet` | `false` | Print nothing, signal the result via exit code |
+| `-version` | | Print the version and exit |
 
 PNG and JPEG inputs are supported. Output is always PNG.
 
@@ -82,9 +86,14 @@ PNG and JPEG inputs are supported. Output is always PNG.
 
 | Code | Meaning |
 |------|---------|
-| `0` | Images match within tolerance |
-| `1` | Difference exceeded `-fail-on` |
-| `2` | Bad usage, unreadable file, or size mismatch |
+| `0` | Everything matched within tolerance |
+| `1` | A comparison exceeded `-fail-on` |
+| `2` | Bad usage, or a file that could not be read |
+
+Comparing a single pair of different sizes is a usage error, code `2`. In
+directory mode the same mismatch fails only that pair, code `1`: there it
+usually means the page grew, which belongs in the report next to the other
+failures rather than aborting the run.
 
 ### Tolerance
 

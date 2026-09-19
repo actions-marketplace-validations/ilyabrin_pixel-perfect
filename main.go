@@ -26,9 +26,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 
 	var (
-		base      = fs.String("base", "", "path to the baseline image (required)")
-		current   = fs.String("current", "", "path to the image under test (required)")
-		out       = fs.String("out", "", "path to write the diff image to (optional)")
+		base      = fs.String("base", "", "baseline image, or a directory of them (required)")
+		current   = fs.String("current", "", "image under test, or a directory of them (required)")
+		out       = fs.String("out", "", "where to write diff images; a directory when comparing directories")
 		threshold = fs.Uint("threshold", 0, "max per-channel delta (0-255) still counted as equal")
 		failOn    = fs.Float64("fail-on", 0, "exit 1 when the diff ratio exceeds this fraction (0-1)")
 		hexColor  = fs.String("color", "FA0000", "highlight colour as RRGGBB")
@@ -39,7 +39,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "pp %s - fast image comparison for visual regression\n\n", version)
-		fmt.Fprintf(stderr, "Usage:\n  pp -base a.png -current b.png -out diff.png\n\nFlags:\n")
+		fmt.Fprintf(stderr, "Usage:\n"+
+			"  pp -base a.png -current b.png -out diff.png\n"+
+			"  pp -base baseline/ -current screenshots/ -out diffs/\n\nFlags:\n")
 		fs.PrintDefaults()
 	}
 
@@ -74,6 +76,31 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitBadUsage
 	}
 
+	opts := DefaultOptions()
+	opts.Threshold = uint8(*threshold)
+	opts.Highlight = highlight
+
+	baseIsDir, err := IsDir(*base)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return exitBadUsage
+	}
+
+	currentIsDir, err := IsDir(*current)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return exitBadUsage
+	}
+
+	if baseIsDir != currentIsDir {
+		fmt.Fprintln(stderr, "error: -base and -current must both be files or both be directories")
+		return exitBadUsage
+	}
+
+	if baseIsDir {
+		return runBatch(*base, *current, *out, opts, *failOn, *quiet, stdout, stderr)
+	}
+
 	baseImg, err := LoadRGBA(*base)
 	if err != nil {
 		fmt.Fprintf(stderr, "error: %v\n", err)
@@ -85,10 +112,6 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "error: %v\n", err)
 		return exitBadUsage
 	}
-
-	opts := DefaultOptions()
-	opts.Threshold = uint8(*threshold)
-	opts.Highlight = highlight
 
 	res, err := Compare(baseImg, currentImg, opts)
 	if err != nil {
@@ -129,12 +152,45 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 func dims(w, h int) string { return fmt.Sprintf("%dx%d", w, h) }
 
+// runBatch compares two directories of images.
+func runBatch(baseDir, currentDir, outDir string, opts Options, failOn float64, quiet bool, stdout, stderr io.Writer) int {
+	summary, err := CompareDirs(baseDir, currentDir, outDir, opts, failOn)
+	if err != nil {
+		fmt.Fprintf(stderr, "error: %v\n", err)
+		return exitBadUsage
+	}
+
+	if !quiet {
+		fmt.Fprint(stdout, summary.Report())
+	}
+
+	writeBatchOutputs(summary)
+
+	if summary.Failed() {
+		return exitDiff
+	}
+	return exitOK
+}
+
+// writeBatchOutputs publishes a directory run to the Actions runner.
+func writeBatchOutputs(s Summary) {
+	appendFile(os.Getenv("GITHUB_OUTPUT"), fmt.Sprintf(
+		"diff-pixels=%d\ndiff-ratio=%.6f\nfailed=%t\ncompared=%d\nfailed-count=%d\n",
+		s.DiffPixels, s.MaxRatio, s.Failed(), s.Compared, s.FailedCount))
+
+	appendFile(os.Getenv("GITHUB_STEP_SUMMARY"), s.MarkdownSummary())
+}
+
 // writeActionOutputs publishes results to the GitHub Actions runner when one is
 // present. Both files are absent outside CI, so failures are ignored.
 func writeActionOutputs(res Result, failed bool, out string) {
+	failedCount := 0
+	if failed {
+		failedCount = 1
+	}
 	appendFile(os.Getenv("GITHUB_OUTPUT"), fmt.Sprintf(
-		"diff-pixels=%d\ndiff-ratio=%.6f\nfailed=%t\n",
-		res.DiffPixels, res.Ratio(), failed))
+		"diff-pixels=%d\ndiff-ratio=%.6f\nfailed=%t\ncompared=1\nfailed-count=%d\n",
+		res.DiffPixels, res.Ratio(), failed, failedCount))
 
 	status := "passed"
 	if failed {

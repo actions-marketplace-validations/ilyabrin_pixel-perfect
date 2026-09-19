@@ -189,3 +189,121 @@ func TestLoadRGBARejectsNonImage(t *testing.T) {
 		t.Error("expected an error when decoding a non-image file")
 	}
 }
+
+// --- directory mode ---------------------------------------------------------
+
+func TestRunComparesDirectories(t *testing.T) {
+	dir := t.TempDir()
+	baseDir := tree(t, filepath.Join(dir, "base"), map[string]color.RGBA{
+		"same.png":    white,
+		"changed.png": white,
+	})
+	currentDir := tree(t, filepath.Join(dir, "current"), map[string]color.RGBA{
+		"same.png":    white,
+		"changed.png": black,
+	})
+	outDir := filepath.Join(dir, "diffs")
+
+	code, stdout, _ := runCLI(t, "-base", baseDir, "-current", currentDir, "-out", outDir)
+
+	if code != exitDiff {
+		t.Errorf("exit code = %d, want %d", code, exitDiff)
+	}
+	for _, want := range []string{"same.png", "changed.png", "2 compared", "1 failed"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout is missing %q:\n%s", want, stdout)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "changed.png")); err != nil {
+		t.Errorf("diff image was not written: %v", err)
+	}
+}
+
+func TestRunDirectoriesAllMatchingExitsZero(t *testing.T) {
+	dir := t.TempDir()
+	baseDir := tree(t, filepath.Join(dir, "base"), map[string]color.RGBA{"a.png": white})
+	currentDir := tree(t, filepath.Join(dir, "current"), map[string]color.RGBA{"a.png": white})
+
+	code, stdout, _ := runCLI(t, "-base", baseDir, "-current", currentDir)
+
+	if code != exitOK {
+		t.Errorf("exit code = %d, want %d", code, exitOK)
+	}
+	if !strings.Contains(stdout, "0 failed") {
+		t.Errorf("stdout = %q, want it to report no failures", stdout)
+	}
+}
+
+// Mixing a file and a directory is a usage error, not a comparison.
+func TestRunRejectsMixedFileAndDirectory(t *testing.T) {
+	dir := t.TempDir()
+	baseDir := tree(t, filepath.Join(dir, "base"), map[string]color.RGBA{"a.png": white})
+	file := writePNG(t, "single.png", 32, 32, white, nil)
+
+	code, _, stderr := runCLI(t, "-base", baseDir, "-current", file)
+
+	if code != exitBadUsage {
+		t.Errorf("exit code = %d, want %d", code, exitBadUsage)
+	}
+	if !strings.Contains(stderr, "both be files or both be directories") {
+		t.Errorf("stderr = %q, want it to explain the mismatch", stderr)
+	}
+}
+
+func TestRunDirectoriesWriteGitHubActionsOutputs(t *testing.T) {
+	dir := t.TempDir()
+	baseDir := tree(t, filepath.Join(dir, "base"), map[string]color.RGBA{
+		"a.png": white,
+		"b.png": white,
+	})
+	currentDir := tree(t, filepath.Join(dir, "current"), map[string]color.RGBA{
+		"a.png": white,
+		"b.png": black,
+	})
+
+	outputFile := filepath.Join(t.TempDir(), "output")
+	summaryFile := filepath.Join(t.TempDir(), "summary")
+	t.Setenv("GITHUB_OUTPUT", outputFile)
+	t.Setenv("GITHUB_STEP_SUMMARY", summaryFile)
+
+	runCLI(t, "-base", baseDir, "-current", currentDir, "-quiet")
+
+	output, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("GITHUB_OUTPUT was not written: %v", err)
+	}
+	for _, want := range []string{"failed=true", "compared=2", "failed-count=1"} {
+		if !strings.Contains(string(output), want) {
+			t.Errorf("GITHUB_OUTPUT = %q, want it to contain %q", output, want)
+		}
+	}
+
+	summary, err := os.ReadFile(summaryFile)
+	if err != nil {
+		t.Fatalf("GITHUB_STEP_SUMMARY was not written: %v", err)
+	}
+	if !strings.Contains(string(summary), "b.png") {
+		t.Errorf("summary should list the failing image:\n%s", summary)
+	}
+}
+
+// The single-file path must keep emitting the same outputs it always has.
+func TestRunSingleFileOutputsStayCompatible(t *testing.T) {
+	a := writePNG(t, "a.png", 32, 32, white, nil)
+	b := writePNG(t, "b.png", 32, 32, white, &[2]int{5, 5})
+
+	outputFile := filepath.Join(t.TempDir(), "output")
+	t.Setenv("GITHUB_OUTPUT", outputFile)
+
+	runCLI(t, "-base", a, "-current", b, "-quiet")
+
+	output, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"diff-pixels=1", "diff-ratio=0.000977", "failed=true", "compared=1"} {
+		if !strings.Contains(string(output), want) {
+			t.Errorf("GITHUB_OUTPUT = %q, want it to contain %q", output, want)
+		}
+	}
+}

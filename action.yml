@@ -40,7 +40,9 @@ outputs:
 
 runs:
   using: 'docker'
-  image: 'Dockerfile'
+  # A prebuilt image starts in about two seconds; pointing at the Dockerfile
+  # instead rebuilds it from source on every run of every workflow.
+  image: 'docker://ghcr.io/ilyabrin/pixel-perfect:v1'
   args:
     - '-base'
     - ${{ inputs.base }}

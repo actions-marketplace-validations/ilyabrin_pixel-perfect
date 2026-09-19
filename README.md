@@ -93,6 +93,10 @@ pp -base a.png -current b.png -threshold 8 -fail-on 0.001
 Outputs: `diff-pixels`, `diff-ratio`, `failed`. The action also writes a summary
 to the workflow run page.
 
+The action runs a prebuilt image from `ghcr.io/ilyabrin/pixel-perfect`, so the
+step starts in a couple of seconds instead of rebuilding the tool from source
+on every run.
+
 Taking the screenshots is out of scope. Use Playwright or Puppeteer for that and
 hand the files to this action.
 

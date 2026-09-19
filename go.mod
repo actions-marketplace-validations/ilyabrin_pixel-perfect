@@ -1,5 +1,3 @@
-module pp
+module github.com/ilyabrin/pixel-perfect
 
-go 1.19
-
-require gopkg.in/yaml.v2 v2.4.0
+go 1.21

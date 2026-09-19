@@ -1,0 +1,56 @@
+name: 'Pixel Perfect'
+description: 'Fast pixel-by-pixel image comparison for visual regression testing'
+author: 'ilyabrin'
+
+branding:
+  icon: 'image'
+  color: 'red'
+
+inputs:
+  base:
+    description: 'Path to the baseline image'
+    required: true
+  current:
+    description: 'Path to the image under test'
+    required: true
+  out:
+    description: 'Path to write the diff image to'
+    required: false
+    default: 'pp-diff.png'
+  threshold:
+    description: 'Max per-channel delta (0-255) still counted as equal'
+    required: false
+    default: '0'
+  fail-on:
+    description: 'Fail the step when the diff ratio exceeds this fraction (0-1)'
+    required: false
+    default: '0'
+  color:
+    description: 'Highlight colour as RRGGBB'
+    required: false
+    default: 'FA0000'
+
+outputs:
+  diff-pixels:
+    description: 'Number of pixels that differ'
+  diff-ratio:
+    description: 'Fraction of pixels that differ, 0 to 1'
+  failed:
+    description: 'true when the diff ratio exceeded fail-on'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - '-base'
+    - ${{ inputs.base }}
+    - '-current'
+    - ${{ inputs.current }}
+    - '-out'
+    - ${{ inputs.out }}
+    - '-threshold'
+    - ${{ inputs.threshold }}
+    - '-fail-on'
+    - ${{ inputs.fail-on }}
+    - '-color'
+    - ${{ inputs.color }}

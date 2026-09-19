@@ -227,3 +227,60 @@ func BenchmarkLegacyUILike(b *testing.B) {
 	base := uiLike(benchW, benchH, 7)
 	benchLegacy(b, base, cloneRGBA(base))
 }
+
+// Antialiasing detection runs only on pixels that already differ, so its cost
+// should track the size of the change, not the size of the image.
+func BenchmarkCompareAntialiasIdentical(b *testing.B) {
+	base := uiLike(benchW, benchH, 7)
+	current := cloneRGBA(base)
+
+	opts := DefaultOptions()
+	opts.IgnoreAntialiasing = true
+
+	b.SetBytes(int64(len(base.Pix)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := Compare(base, current, opts); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkCompareAntialiasSparse(b *testing.B) {
+	base := uiLike(benchW, benchH, 7)
+	current := cloneRGBA(base)
+	for y := 400; y < 500; y++ {
+		for x := 600; x < 800; x++ {
+			current.Set(x, y, color.RGBA{1, 2, 3, 255})
+		}
+	}
+
+	opts := DefaultOptions()
+	opts.IgnoreAntialiasing = true
+
+	b.SetBytes(int64(len(base.Pix)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := Compare(base, current, opts); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// Worst case: every pixel differs, so every pixel is also checked for
+// antialiasing.
+func BenchmarkCompareAntialiasAllDifferent(b *testing.B) {
+	base := noise(benchW, benchH, 1)
+	current := noise(benchW, benchH, 2)
+
+	opts := DefaultOptions()
+	opts.IgnoreAntialiasing = true
+
+	b.SetBytes(int64(len(base.Pix)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := Compare(base, current, opts); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

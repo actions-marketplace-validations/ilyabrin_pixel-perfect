@@ -307,3 +307,30 @@ func TestRunSingleFileOutputsStayCompatible(t *testing.T) {
 		}
 	}
 }
+
+// The action passes this flag as -ignore-antialiasing=true|false, so both
+// spellings have to parse.
+func TestRunAcceptsAntialiasingFlagInBothForms(t *testing.T) {
+	a := writePNG(t, "a.png", 32, 32, white, nil)
+
+	for _, arg := range []string{"-ignore-antialiasing", "-ignore-antialiasing=true", "-ignore-antialiasing=false"} {
+		if code, _, stderr := runCLI(t, "-base", a, "-current", a, arg); code != exitOK {
+			t.Errorf("%s: exit code = %d, want %d (stderr: %s)", arg, code, exitOK, stderr)
+		}
+	}
+}
+
+// Turning the flag on must not stop a real regression from failing the run.
+func TestRunAntialiasingStillFailsOnRealRegression(t *testing.T) {
+	a := writePNG(t, "a.png", 64, 64, white, nil)
+	b := writePNG(t, "b.png", 64, 64, black, nil)
+
+	code, stdout, _ := runCLI(t, "-base", a, "-current", b, "-ignore-antialiasing")
+
+	if code != exitDiff {
+		t.Errorf("exit code = %d, want %d", code, exitDiff)
+	}
+	if !strings.Contains(stdout, "4096/4096") {
+		t.Errorf("stdout = %q, want every pixel reported as differing", stdout)
+	}
+}

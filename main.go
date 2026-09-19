@@ -33,6 +33,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		failOn    = fs.Float64("fail-on", 0, "exit 1 when the diff ratio exceeds this fraction (0-1)")
 		hexColor  = fs.String("color", "FA0000", "highlight colour as RRGGBB")
 		alpha     = fs.Uint("alpha", 200, "highlight opacity (0-255)")
+		ignoreAA  = fs.Bool("ignore-antialiasing", false, "treat antialiased edge pixels as equal")
 		quiet     = fs.Bool("quiet", false, "print nothing, signal the result via exit code")
 		showVer   = fs.Bool("version", false, "print the version and exit")
 	)
@@ -79,6 +80,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	opts := DefaultOptions()
 	opts.Threshold = uint8(*threshold)
 	opts.Highlight = highlight
+	opts.IgnoreAntialiasing = *ignoreAA
 
 	baseIsDir, err := IsDir(*base)
 	if err != nil {

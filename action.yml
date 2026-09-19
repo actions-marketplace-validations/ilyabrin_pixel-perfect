@@ -1,4 +1,7 @@
-name: 'Pixel Perfect'
+# Marketplace requires a name that collides with no existing action, user
+# or organization; github.com/pixel-perfect is taken. This is the listing
+# name only: workflows still reference ilyabrin/pixel-perfect.
+name: 'Pixel Perfect Diff'
 description: 'Fast pixel-by-pixel image comparison for visual regression testing'
 author: 'ilyabrin'
 

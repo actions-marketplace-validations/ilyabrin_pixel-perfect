@@ -18,7 +18,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       # Cross-compilation happens inside the Dockerfile, so no QEMU is needed;
       # buildx is here only to produce a multi-arch manifest.

@@ -27,6 +27,10 @@ type Options struct {
 	// so this is usually what you want when diffing screenshots.
 	IgnoreAntialiasing bool
 
+	// Ignore lists rectangles excluded from the comparison, for regions whose
+	// content changes on every run: timestamps, avatars, counters, adverts.
+	Ignore Regions
+
 	// Workers is the number of goroutines used. Zero means runtime.NumCPU().
 	Workers int
 }
@@ -55,6 +59,10 @@ type Result struct {
 	// AntialiasedPixels counts pixels that differed but were attributed to
 	// antialiasing. Always zero unless Options.IgnoreAntialiasing is set.
 	AntialiasedPixels int
+
+	// IgnoredPixels is how many pixels fell inside Options.Ignore and were
+	// excluded from TotalPixels.
+	IgnoredPixels int
 }
 
 // Ratio is the fraction of pixels that differ, in the range [0,1].
@@ -86,7 +94,8 @@ func Compare(base, current *image.RGBA, opts Options) (Result, error) {
 	// touch the pixels that actually differ.
 	copy(out.Pix, base.Pix)
 
-	res := Result{Image: out, TotalPixels: w * h}
+	ignored := opts.Ignore.IgnoredPixels(w, h)
+	res := Result{Image: out, TotalPixels: w*h - ignored, IgnoredPixels: ignored}
 	if w == 0 || h == 0 {
 		return res, nil
 	}
@@ -149,11 +158,21 @@ func diffBand(base, current, out *image.RGBA, y0, y1 int, opts Options) (diff, a
 			continue
 		}
 
+		// Resolved per row, because most rows meet no region at all.
+		var masked []span
+		if len(opts.Ignore) > 0 {
+			masked = maskForRow(opts.Ignore, y, w)
+		}
+
 		k := out.PixOffset(0, y)
 		rowOut := out.Pix[k : k+rowLen]
 
 		for x := 0; x < rowLen; x += 4 {
 			if !pixelDiffers(rowA[x:x+4:x+4], rowB[x:x+4:x+4], thr) {
+				continue
+			}
+
+			if masked != nil && covers(masked, x/4) {
 				continue
 			}
 

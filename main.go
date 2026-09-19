@@ -38,6 +38,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		showVer   = fs.Bool("version", false, "print the version and exit")
 	)
 
+	var ignore Regions
+	fs.Var(&ignore, "ignore", "exclude a region as x,y,width,height; repeatable, or several separated by ';'")
+
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "pp %s - fast image comparison for visual regression\n\n", version)
 		fmt.Fprintf(stderr, "Usage:\n"+
@@ -81,6 +84,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	opts.Threshold = uint8(*threshold)
 	opts.Highlight = highlight
 	opts.IgnoreAntialiasing = *ignoreAA
+	opts.Ignore = ignore
 
 	baseIsDir, err := IsDir(*base)
 	if err != nil {

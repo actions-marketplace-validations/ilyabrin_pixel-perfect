@@ -27,6 +27,8 @@ CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o pp .
 
 ## Usage
 
+One pair at a time:
+
 ```shell
 pp -base baseline.png -current screenshot.png -out diff.png
 ```
@@ -36,13 +38,35 @@ pp -base baseline.png -current screenshot.png -out diff.png
 diff written to diff.png
 ```
 
+Or a whole directory, which is what a real visual regression run looks like:
+
+```shell
+pp -base baseline/ -current screenshots/ -out diffs/
+```
+
+```text
+ok      checkout.png   0/2073600 pixels (0.0000%)
+FAIL    dashboard.png  9024/2073600 pixels (0.4352%) -> diffs/dashboard.png
+MISSING pricing.png    not in the current set
+new     settings.png   not in the baseline
+
+3 compared, 2 failed
+```
+
+Images are matched by their path relative to each directory, so nested
+folders line up, and diff images keep the same layout under `-out`.
+
+A baseline screenshot with no counterpart fails the run: the page it covered
+is gone. A screenshot that only exists in the current set is reported but does
+not fail, since adding a page is not a regression.
+
 ### Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `-base` | required | Baseline image |
-| `-current` | required | Image under test |
-| `-out` | none | Where to write the diff image; skipped when the images match |
+| `-base` | required | Baseline image, or a directory of them |
+| `-current` | required | Image under test, or a directory of them |
+| `-out` | none | Where to write diffs; a directory when comparing directories. Skipped for images that match |
 | `-threshold` | `0` | Max per-channel delta (0-255) still counted as equal |
 | `-fail-on` | `0` | Exit 1 when the diff ratio exceeds this fraction (0-1) |
 | `-color` | `FA0000` | Highlight colour as RRGGBB |
@@ -77,9 +101,9 @@ pp -base a.png -current b.png -threshold 8 -fail-on 0.001
 - uses: ilyabrin/pixel-perfect@v1
   id: pixel
   with:
-    base: baseline/home.png
-    current: screenshots/home.png
-    out: diff.png
+    base: baseline/
+    current: screenshots/
+    out: diffs/
     threshold: 8
     fail-on: 0.001
 
@@ -87,10 +111,10 @@ pp -base a.png -current b.png -threshold 8 -fail-on 0.001
   if: failure()
   with:
     name: visual-diff
-    path: diff.png
+    path: diffs/
 ```
 
-Outputs: `diff-pixels`, `diff-ratio`, `failed`. The action also writes a summary
+Outputs: `diff-pixels`, `diff-ratio`, `failed`, `compared`, `failed-count`. The action also writes a summary
 to the workflow run page.
 
 The action runs a prebuilt image from `ghcr.io/ilyabrin/pixel-perfect`, so the
@@ -160,7 +184,7 @@ more like the 51x row.
 ## Development
 
 ```shell
-go test -race -cover ./...      # 91% coverage
+go test -race -cover ./...      # 90% coverage
 go test -run '^$' -bench .      # benchmarks
 go vet ./...
 ```

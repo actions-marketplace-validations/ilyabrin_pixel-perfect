@@ -8,13 +8,13 @@ branding:
 
 inputs:
   base:
-    description: 'Path to the baseline image'
+    description: 'Baseline image, or a directory of them'
     required: true
   current:
-    description: 'Path to the image under test'
+    description: 'Image under test, or a directory of them'
     required: true
   out:
-    description: 'Path to write the diff image to'
+    description: 'Where to write diff images; a directory when comparing directories'
     required: false
     default: 'pp-diff.png'
   threshold:
@@ -36,7 +36,11 @@ outputs:
   diff-ratio:
     description: 'Fraction of pixels that differ, 0 to 1'
   failed:
-    description: 'true when the diff ratio exceeded fail-on'
+    description: 'true when any comparison exceeded fail-on'
+  compared:
+    description: 'Number of image pairs compared'
+  failed-count:
+    description: 'Number of comparisons that failed'
 
 runs:
   using: 'docker'

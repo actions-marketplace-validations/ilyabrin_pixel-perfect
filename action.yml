@@ -29,6 +29,10 @@ inputs:
     description: 'Highlight colour as RRGGBB'
     required: false
     default: 'FA0000'
+  ignore-antialiasing:
+    description: 'Treat antialiased edge pixels as equal (recommended for text-heavy pages)'
+    required: false
+    default: 'false'
 
 outputs:
   diff-pixels:
@@ -60,3 +64,4 @@ runs:
     - ${{ inputs.fail-on }}
     - '-color'
     - ${{ inputs.color }}
+    - '-ignore-antialiasing=${{ inputs.ignore-antialiasing }}'

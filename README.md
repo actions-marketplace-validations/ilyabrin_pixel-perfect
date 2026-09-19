@@ -71,6 +71,7 @@ not fail, since adding a page is not a regression.
 | `-fail-on` | `0` | Exit 1 when the diff ratio exceeds this fraction (0-1) |
 | `-color` | `FA0000` | Highlight colour as RRGGBB |
 | `-alpha` | `200` | Highlight opacity (0-255) |
+| `-ignore-antialiasing` | `false` | Treat antialiased edge pixels as equal |
 | `-quiet` | `false` | Print nothing, signal the result via exit code |
 
 PNG and JPEG inputs are supported. Output is always PNG.
@@ -86,14 +87,32 @@ PNG and JPEG inputs are supported. Output is always PNG.
 ### Tolerance
 
 Font rendering and antialiasing are not byte-stable between runs, so an exact
-match is often too strict in CI. Two knobs relax it:
+match is often too strict in CI. Three knobs relax it:
 
-* `-threshold` ignores small per-channel deltas, which covers antialiasing.
+* `-ignore-antialiasing` skips pixels that are smoothed edges rather than real
+  changes.
+* `-threshold` ignores small per-channel deltas.
 * `-fail-on` ignores a small fraction of differing pixels overall.
 
 ```shell
-pp -base a.png -current b.png -threshold 8 -fail-on 0.001
+pp -base a.png -current b.png -ignore-antialiasing -threshold 8 -fail-on 0.001
 ```
+
+### Antialiasing
+
+A threshold judges each pixel alone, so it cannot tell a re-smoothed glyph edge
+from a genuinely recoloured pixel: both are small deltas. `-ignore-antialiasing`
+looks at the neighbourhood instead. A pixel is written off as antialiasing only
+when it sits between a darker and a brighter neighbour, and that edge exists in
+both images with only its smoothing moved.
+
+Use it on anything with text. It cannot hide a moved, resized or recoloured
+element, because those change whole regions rather than single edge pixels,
+and there are tests pinning exactly that.
+
+It costs nothing when images match, since only already-differing pixels are
+checked. On wholly different images it is roughly 30x slower than a plain
+comparison (110 ms against 3.5 ms for 1920x1080), which is why it is opt-in.
 
 ## GitHub Action
 
@@ -104,6 +123,7 @@ pp -base a.png -current b.png -threshold 8 -fail-on 0.001
     base: baseline/
     current: screenshots/
     out: diffs/
+    ignore-antialiasing: true
     threshold: 8
     fail-on: 0.001
 
@@ -184,7 +204,7 @@ more like the 51x row.
 ## Development
 
 ```shell
-go test -race -cover ./...      # 90% coverage
+go test -race -cover ./...      # 92% coverage
 go test -run '^$' -bench .      # benchmarks
 go vet ./...
 ```

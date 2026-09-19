@@ -22,6 +22,11 @@ type Options struct {
 	// controls how much of the original pixel remains visible.
 	Highlight color.RGBA
 
+	// IgnoreAntialiasing skips pixels that look like antialiased edges rather
+	// than real changes. Font and edge smoothing is not stable between runs,
+	// so this is usually what you want when diffing screenshots.
+	IgnoreAntialiasing bool
+
 	// Workers is the number of goroutines used. Zero means runtime.NumCPU().
 	Workers int
 }
@@ -46,6 +51,10 @@ type Result struct {
 
 	// TotalPixels is the pixel count of either image.
 	TotalPixels int
+
+	// AntialiasedPixels counts pixels that differed but were attributed to
+	// antialiasing. Always zero unless Options.IgnoreAntialiasing is set.
+	AntialiasedPixels int
 }
 
 // Ratio is the fraction of pixels that differ, in the range [0,1].
@@ -90,7 +99,8 @@ func Compare(base, current *image.RGBA, opts Options) (Result, error) {
 		workers = h
 	}
 
-	counts := make([]int, workers)
+	diffCounts := make([]int, workers)
+	aaCounts := make([]int, workers)
 	rows := (h + workers - 1) / workers
 
 	var wg sync.WaitGroup
@@ -107,25 +117,25 @@ func Compare(base, current *image.RGBA, opts Options) (Result, error) {
 		wg.Add(1)
 		go func(i, y0, y1 int) {
 			defer wg.Done()
-			counts[i] = diffBand(base, current, out, y0, y1, opts)
+			diffCounts[i], aaCounts[i] = diffBand(base, current, out, y0, y1, opts)
 		}(i, y0, y1)
 	}
 	wg.Wait()
 
-	for _, c := range counts {
-		res.DiffPixels += c
+	for i := range diffCounts {
+		res.DiffPixels += diffCounts[i]
+		res.AntialiasedPixels += aaCounts[i]
 	}
 	return res, nil
 }
 
 // diffBand compares rows [y0,y1) and paints differences into out.
-func diffBand(base, current, out *image.RGBA, y0, y1 int, opts Options) int {
+func diffBand(base, current, out *image.RGBA, y0, y1 int, opts Options) (diff, antialiased int) {
 	w := base.Bounds().Dx()
 	rowLen := w * 4
 	thr := int(opts.Threshold)
 	hl := opts.Highlight
 
-	var count int
 	for y := y0; y < y1; y++ {
 		i := base.PixOffset(base.Bounds().Min.X, base.Bounds().Min.Y+y)
 		j := current.PixOffset(current.Bounds().Min.X, current.Bounds().Min.Y+y)
@@ -146,11 +156,20 @@ func diffBand(base, current, out *image.RGBA, y0, y1 int, opts Options) int {
 			if !pixelDiffers(rowA[x:x+4:x+4], rowB[x:x+4:x+4], thr) {
 				continue
 			}
-			count++
+
+			// Checked only for pixels that already differ, which keeps the
+			// cost proportional to the size of the change rather than the
+			// size of the image.
+			if opts.IgnoreAntialiasing && antialiasedInEither(base, current, x/4, y) {
+				antialiased++
+				continue
+			}
+
+			diff++
 			blend(rowOut[x:x+4:x+4], hl)
 		}
 	}
-	return count
+	return diff, antialiased
 }
 
 // pixelDiffers reports whether any channel differs by more than thr.

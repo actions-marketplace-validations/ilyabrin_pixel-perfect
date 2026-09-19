@@ -72,6 +72,7 @@ not fail, since adding a page is not a regression.
 | `-color` | `FA0000` | Highlight colour as RRGGBB |
 | `-alpha` | `200` | Highlight opacity (0-255) |
 | `-ignore-antialiasing` | `false` | Treat antialiased edge pixels as equal |
+| `-ignore` | none | Exclude a region as `x,y,width,height`; repeatable |
 | `-quiet` | `false` | Print nothing, signal the result via exit code |
 
 PNG and JPEG inputs are supported. Output is always PNG.
@@ -97,6 +98,23 @@ match is often too strict in CI. Three knobs relax it:
 ```shell
 pp -base a.png -current b.png -ignore-antialiasing -threshold 8 -fail-on 0.001
 ```
+
+### Ignored regions
+
+Timestamps, avatars, counters and adverts change on every run and would fail
+every build. Exclude them by rectangle:
+
+```shell
+pp -base a.png -current b.png -ignore 0,0,320,64 -ignore 1200,900,200,48
+```
+
+Regions are given as `x,y,width,height` in pixels from the top left, and the
+flag repeats. A single occurrence may also hold several regions separated by
+semicolons, which is how the action passes a list through one input.
+
+Ignored pixels leave the denominator as well as the count, so `-fail-on` keeps
+measuring the part of the page you actually compare. Regions larger than the
+image are clipped rather than rejected.
 
 ### Antialiasing
 
@@ -124,6 +142,7 @@ comparison (110 ms against 3.5 ms for 1920x1080), which is why it is opt-in.
     current: screenshots/
     out: diffs/
     ignore-antialiasing: true
+    ignore: '0,0,1280,64; 1100,900,180,48'
     threshold: 8
     fail-on: 0.001
 

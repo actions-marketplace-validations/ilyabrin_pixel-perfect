@@ -33,6 +33,10 @@ inputs:
     description: 'Treat antialiased edge pixels as equal (recommended for text-heavy pages)'
     required: false
     default: 'false'
+  ignore:
+    description: 'Regions to exclude as x,y,width,height, several separated by ";"'
+    required: false
+    default: ''
 
 outputs:
   diff-pixels:
@@ -65,3 +69,4 @@ runs:
     - '-color'
     - ${{ inputs.color }}
     - '-ignore-antialiasing=${{ inputs.ignore-antialiasing }}'
+    - '-ignore=${{ inputs.ignore }}'

@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Pinned in one place: the cache key and the install must never disagree.
+  STATICCHECK_VERSION: '2026.2.1'
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -24,12 +28,25 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # Building staticcheck from source takes about 17 seconds, which was
+      # half this job. The binary depends only on its version, so caching it
+      # is exact: a miss simply builds it as before.
+      #
+      # Go module caching is pointless here by contrast, since the project has
+      # no third-party dependencies at all.
+      - name: Cache staticcheck
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/staticcheck
+          key: staticcheck-${{ env.STATICCHECK_VERSION }}-${{ runner.os }}
+
       # Catches what vet does not: unused code, redundant conditions, misuse
       # of the standard library. Pinned so a new release cannot fail CI on an
       # unrelated commit; dependabot bumps it like any other action.
       - name: Staticcheck
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@2026.2.1
+          command -v staticcheck >/dev/null \
+            || go install "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}"
           staticcheck ./...
 
       - name: Test with race detector

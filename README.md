@@ -83,7 +83,7 @@ pp -base a.png -current b.png -threshold 8 -fail-on 0.001
     threshold: 8
     fail-on: 0.001
 
-- uses: actions/upload-artifact@v4
+- uses: actions/upload-artifact@v7
   if: failure()
   with:
     name: visual-diff

@@ -39,6 +39,16 @@ inputs:
     description: 'Regions to exclude as x,y,width,height, several separated by ";"'
     required: false
     default: ''
+  alpha:
+    description: 'Highlight opacity, 0-255'
+    required: false
+    default: '200'
+  max-pixels:
+    description: >-
+      Refuse images larger than this many pixels; 0 disables the check.
+      Raise it for very long full-page screenshots.
+    required: false
+    default: '100000000'
 
 outputs:
   diff-pixels:
@@ -72,3 +82,7 @@ runs:
     - ${{ inputs.color }}
     - '-ignore-antialiasing=${{ inputs.ignore-antialiasing }}'
     - '-ignore=${{ inputs.ignore }}'
+    - '-alpha'
+    - ${{ inputs.alpha }}
+    - '-max-pixels'
+    - ${{ inputs.max-pixels }}

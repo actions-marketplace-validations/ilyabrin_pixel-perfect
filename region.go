@@ -71,15 +71,11 @@ func ParseRegion(spec string) (image.Rectangle, error) {
 	return image.Rect(x, y, x+w, y+h), nil
 }
 
-// rowMask marks which pixels of a row fall inside an ignored region.
+// span is a half-open range of x positions to skip.
 //
 // Masking is resolved per row rather than per pixel: a row either intersects
 // some region or it does not, and most rows do not.
-type rowMask struct {
-	spans []span // x ranges to skip, in pixels
-}
-
-type span struct{ from, to int } // half-open
+type span struct{ from, to int }
 
 // maskForRow returns the spans of row y covered by any region, or nil when the
 // row is untouched.

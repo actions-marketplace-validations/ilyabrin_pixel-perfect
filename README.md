@@ -73,6 +73,7 @@ not fail, since adding a page is not a regression.
 | `-alpha` | `200` | Highlight opacity (0-255) |
 | `-ignore-antialiasing` | `false` | Treat antialiased edge pixels as equal |
 | `-ignore` | none | Exclude a region as `x,y,width,height`; repeatable |
+| `-max-pixels` | `100000000` | Refuse images larger than this; `0` disables the check |
 | `-quiet` | `false` | Print nothing, signal the result via exit code |
 
 PNG and JPEG inputs are supported. Output is always PNG.
@@ -224,8 +225,10 @@ more like the 51x row.
 
 ```shell
 go test -race -cover ./...      # 92% coverage
+go test -race -shuffle=on ./... # order independence
 go test -run '^$' -bench .      # benchmarks
 go vet ./...
+staticcheck ./...
 ```
 
 The comparison core is in `compare.go` and is a pure function: it does not

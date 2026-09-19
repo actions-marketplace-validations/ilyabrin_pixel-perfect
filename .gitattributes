@@ -1,0 +1,6 @@
+# Keep LF in the working tree on every platform. Go tooling compares against
+# gofmt's LF output, so a CRLF checkout on Windows makes `gofmt -l` flag every
+# file even though the repository is clean.
+* text=auto eol=lf
+
+*.png binary
